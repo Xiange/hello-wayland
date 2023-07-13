@@ -35,18 +35,24 @@ struct hello_context
 	int 					width_shm, height_shm;
 	float 					offset;
 	int 					shm_fd;
-	int 					frame_done;
+	int 					mouse_set;
+	int 					mouse_erase;
 	unsigned int 			last_frame;
 	uint32_t *				pData32;
+	uint32_t *				pDataMouse;
 	struct wl_shm* 			shm;
 	struct xdg_wm_base* 	wm_base;
 	struct wl_compositor*	compositor;
+	struct wl_subcompositor* subcompositor;
 	struct wl_surface*		surface;
+	struct wl_surface*		surface_mouse;
 	struct xdg_surface *	xdg_surface;
 	struct xdg_toplevel*	xdg_toplevel; 
+	struct wl_subsurface*	xdg_sub; 
 	struct wl_seat* 		seat;
 	struct wl_shm_pool *	pool;
 	struct wl_buffer *		buffer;
+	struct wl_buffer *		bufferMouse;
 };
 
 
@@ -84,6 +90,10 @@ static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_sur
     	fprintf(stderr, "Create buffer failed\n");
 		return;
 	}
+	//attach subbufer
+	wl_surface_attach(g_context.surface_mouse, g_context.bufferMouse, 0, 0);
+	wl_surface_commit(g_context.surface_mouse);
+
 	//attach buffer
 	wl_surface_attach(g_context.surface, buffer, 0, 0);
 	wl_surface_commit(g_context.surface);
@@ -147,6 +157,10 @@ static void on_global_added(void *data,
 		g_context.seat=wl_registry_bind(wl_registry, name, &wl_seat_interface, version);
 		wl_seat_add_listener(g_context.seat, &seat_listener, NULL);
 	}
+	else if(strcmp(interface, wl_subcompositor_interface.name)==0) 
+	{
+		g_context.subcompositor=wl_registry_bind(wl_registry, name, &wl_subcompositor_interface, version);
+	}
 }
 
 static void on_global_removed(void *data,
@@ -190,7 +204,8 @@ int main()
 	wl_display_roundtrip(display);
 
 	//check shm,compositor,and wm_base
-	if(g_context.shm==NULL || g_context.compositor==NULL || g_context.wm_base==NULL)
+	if(g_context.shm==NULL || g_context.compositor==NULL || g_context.wm_base==NULL ||
+			g_context.subcompositor==NULL)
 	{
 		fprintf(stderr, "Interface bind failed.\n");
 		goto ENDMAIN;
@@ -200,11 +215,35 @@ int main()
 	g_context.running=1;
 	g_context.shm_fd=-1;
 	g_context.surface = wl_compositor_create_surface(g_context.compositor);
+	g_context.surface_mouse = wl_compositor_create_surface(g_context.compositor);
+
+	if(g_context.surface==NULL || g_context.surface_mouse==NULL)
+	{
+		fprintf(stderr, "create surface failed\n");
+		iRet=2;
+		goto ENDMAIN;
+	}
+
 
 	//create toplevel surface with xdg_wm_base
 	g_context.xdg_surface = xdg_wm_base_get_xdg_surface(g_context.wm_base, g_context.surface);
 	g_context.xdg_toplevel = xdg_surface_get_toplevel(g_context.xdg_surface);
 
+	//create sub_surface, set position ,z-order, and sync.
+	g_context.xdg_sub=wl_subcompositor_get_subsurface(g_context.subcompositor, 
+			g_context.surface_mouse, g_context.surface);
+
+	if(g_context.xdg_sub==NULL)
+	{
+		fprintf(stderr, "create sub surface failed, code=%ld\n", (long)g_context.xdg_sub);
+		iRet=3;
+		goto ENDMAIN;
+	}
+
+	//position,order,sync.
+	wl_subsurface_set_position(g_context.xdg_sub, 0, 0);
+	wl_subsurface_place_above(g_context.xdg_sub, g_context.surface);
+	wl_subsurface_set_sync(g_context.xdg_sub);
 
 	//add callbacks
 	xdg_surface_add_listener(g_context.xdg_surface, &xdg_surface_listener, NULL);
@@ -230,11 +269,15 @@ ENDMAIN:
 
 	if(g_context.xdg_toplevel) xdg_toplevel_destroy(g_context.xdg_toplevel);
 	if(g_context.xdg_surface) xdg_surface_destroy(g_context.xdg_surface);
+	if(g_context.xdg_sub) wl_subsurface_destroy(g_context.xdg_sub);
 	if(g_context.surface) wl_surface_destroy(g_context.surface);
+	if(g_context.surface_mouse) wl_surface_destroy(g_context.surface_mouse);
 
 
 	if(g_context.pData32) munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4);
+	if(g_context.pDataMouse) munmap(g_context.pDataMouse, g_context.width_shm*g_context.height_shm*4);
 	if(g_context.buffer) wl_buffer_destroy(g_context.buffer);
+	if(g_context.buffer) wl_buffer_destroy(g_context.bufferMouse);
     if(g_context.pool) wl_shm_pool_destroy(g_context.pool);
     if(g_context.shm_fd!=-1) close(g_context.shm_fd);
 
@@ -246,7 +289,8 @@ ENDMAIN:
 static int create_buffer(int width, int height) 
 {
 	int stride = width * 4;
-	int size = stride * height;
+	int offset = stride * height;
+	int size = offset * 2; 		//2 buffer
 	int bChange=1;
 
 	if(g_context.shm_fd==-1)
@@ -283,7 +327,9 @@ static int create_buffer(int width, int height)
 		if(g_context.pData32)
 		{
 			munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4);
+			munmap(g_context.pDataMouse, g_context.width_shm*g_context.height_shm*4);
 			g_context.pData32=NULL;
+			g_context.pDataMouse=NULL;
 		}
 
 		g_context.width_shm=width;
@@ -291,7 +337,10 @@ static int create_buffer(int width, int height)
 
 		uint32_t *data = mmap(NULL, size,
 				PROT_READ | PROT_WRITE, MAP_SHARED, g_context.shm_fd, 0);
-		if (data == MAP_FAILED) {
+
+		g_context.pDataMouse = mmap(NULL, size,
+				PROT_READ | PROT_WRITE, MAP_SHARED, g_context.shm_fd, offset);
+		if (data == MAP_FAILED || g_context.pDataMouse==MAP_FAILED) {
 			fprintf(stderr, "mmap fd %d failed, size=%d\n", g_context.shm_fd, size);
 			close(g_context.shm_fd);
 			g_context.shm_fd=-1;
@@ -299,12 +348,19 @@ static int create_buffer(int width, int height)
 		}
 		g_context.pData32=data;
 
+		if(g_context.bufferMouse) wl_buffer_destroy(g_context.bufferMouse);
 		if(g_context.buffer) wl_buffer_destroy(g_context.buffer);
 		if(g_context.pool) wl_shm_pool_destroy(g_context.pool);
 		g_context.pool = wl_shm_create_pool(g_context.shm, g_context.shm_fd, size);
 
    		g_context.buffer = wl_shm_pool_create_buffer(g_context.pool, 0, 
 			width, height, stride, WL_SHM_FORMAT_XRGB8888);
+
+   		g_context.bufferMouse = wl_shm_pool_create_buffer(g_context.pool, offset, 
+			width, height, stride, WL_SHM_FORMAT_ARGB8888);
+
+		//clear mouse buffer
+		memset(g_context.pDataMouse, 0, g_context.width_shm*g_context.height_shm*4);
 	}
 	return 0;
 }
@@ -366,8 +422,46 @@ static void pointer_motion(void *data,
 		       wl_fixed_t surface_x,
 		       wl_fixed_t surface_y)
 {
+		int x=surface_x/256;
+		int y=surface_y/256;
+
+		uint32_t* pData=g_context.pDataMouse+(x+y*g_context.width_shm);
+
+
 		fprintf(stderr, "pointer_motion, %d, %d, time=%d\n", surface_x/256, surface_y/256, time);
-		g_context.offset=(float)surface_x/1024;
+
+		int width=10;
+
+		if((x>=0 && x<g_context.width_shm) && ( y>=0 && y<g_context.height_shm-width))
+		{
+			int xt,yt;
+			if(g_context.mouse_set)
+			{
+				for(yt=0; yt<width; yt++)
+				{
+					for(xt=0; xt<width; xt++)
+					{
+						pData[xt]=(0xC0<<24 | 0xFF<<16);
+					}
+					pData+=g_context.width_shm;
+				}
+			}
+			else if(g_context.mouse_erase)
+			{
+				for(yt=0; yt<width; yt++)
+				{
+					for(xt=0; xt<width; xt++)
+					{
+						pData[xt]=0;
+					}
+					pData+=g_context.width_shm;
+				}
+			}
+		}
+
+
+		wl_surface_damage_buffer(g_context.surface_mouse, x, y, width, width);
+
 }
 	
 static void pointer_axis(void *data,
@@ -389,7 +483,23 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
 	fprintf(stderr, "pointer_button, btn=%d, stat=%d, serial=%d, time=%d\n", button, state,
 			serial, time);
 	if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
-		xdg_toplevel_move(g_context.xdg_toplevel, seat, serial);
+		//xdg_toplevel_move(g_context.xdg_toplevel, seat, serial);
+		g_context.mouse_set=1;
+	}
+
+	if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_RELEASED) {
+		//xdg_toplevel_move(g_context.xdg_toplevel, seat, serial);
+		g_context.mouse_set=0;
+	}
+
+	if (button == BTN_RIGHT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
+		//xdg_toplevel_move(g_context.xdg_toplevel, seat, serial);
+		g_context.mouse_erase=1;
+	}
+
+	if (button == BTN_RIGHT && state == WL_POINTER_BUTTON_STATE_RELEASED) {
+		//xdg_toplevel_move(g_context.xdg_toplevel, seat, serial);
+		g_context.mouse_erase=0;
 	}
 }
 
@@ -482,11 +592,13 @@ static void wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t t
 
 	/* Submit a frame for this event */
 	struct wl_buffer *buffer = draw_frame(g_context.width_shm, g_context.height_shm);
+
+	wl_surface_attach(g_context.surface_mouse, g_context.bufferMouse, 0, 0);
 	wl_surface_attach(g_context.surface, buffer, 0, 0);
 	wl_surface_damage_buffer(g_context.surface, 0, 0, INT32_MAX, INT32_MAX);
+	wl_surface_commit(g_context.surface_mouse);
 	wl_surface_commit(g_context.surface);
     fprintf(stderr, "frame done, time=%d\n", time);
-	g_context.frame_done=1;
 
 	g_context.last_frame = time;
 }
