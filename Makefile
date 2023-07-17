@@ -10,7 +10,7 @@ clean:
 	rm helloworld
 
 helloworld: $(SOURCES) xdg-shell-client-protocol.h
-	gcc -o $@ $(SOURCES) -lwayland-client
+	gcc -o $@ $(SOURCES) -lwayland-client -lcairo
 
 xdg-shell-client-protocol.h:
 	$(WAYLAND_SCANNER) client-header $(XDG_SHELL_PROTOCOL) $@
