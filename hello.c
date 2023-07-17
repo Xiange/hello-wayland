@@ -13,7 +13,7 @@
 void* LoadImageFile(const char* file, int* pWidth, int* pHeight);
 
 static void draw_cairo(int x, int y);
-static struct wl_buffer *draw_frame(int width, int height); 
+static struct wl_buffer *draw_frame(int width, int height, int time_in_ms); 
 static void *draw_gif(int x, int y, int time_in_ms); 
 
 //Seat callbacks
@@ -96,7 +96,7 @@ static void xdg_surface_handle_configure(void *data, struct xdg_surface *xdg_sur
 	if(height==0) height=480;
     fprintf(stderr, "surface: hanle configure, width=%d, height=%d\n", width, height);
 
-	buffer = draw_frame(width, height);
+	buffer = draw_frame(width, height, 0);
 	if (buffer == NULL) {
     	fprintf(stderr, "Create buffer failed\n");
 		return;
@@ -244,7 +244,6 @@ int main()
 	g_context.transparent=255;
 	g_context.surface = wl_compositor_create_surface(g_context.compositor);
 	g_context.surface_mouse = wl_compositor_create_surface(g_context.compositor);
-	g_context.gif_frame_time=30;
 
 	if(g_context.surface==NULL || g_context.surface_mouse==NULL)
 	{
@@ -436,7 +435,7 @@ static int create_buffer(int width, int height)
 }
 
 
-static struct wl_buffer *draw_frame(int width, int height) 
+static struct wl_buffer *draw_frame(int width, int height, int time_in_ms) 
 {
 
 	int stride = width * 4;
@@ -464,14 +463,15 @@ static struct wl_buffer *draw_frame(int width, int height)
     }
 
 	// Draw GIF
-	image_copy(&g_context.gif_handle, g_context.pData32,  0, 0, 300, 50, stride,
-			g_context.gif_handle.width, g_context.gif_handle.height);
-
-	wl_surface_damage_buffer(g_context.surface_mouse, 300, 50, 
+	image_copy_vflip(&g_context.gif_handle, g_context.pData32,  0, 0, 300, 50, stride,
 			g_context.gif_handle.width, g_context.gif_handle.height);
 
 	//next page
-	image_mp_lock_page(&g_context.gif_handle, g_context.gif_handle.pages_cur+1);
+	if(time_in_ms - g_context.gif_frame_time > 120)
+	{
+		image_mp_lock_page(&g_context.gif_handle, g_context.gif_handle.pages_cur+1);
+		g_context.gif_frame_time=time_in_ms;
+	}
 
     return g_context.buffer;
 
@@ -689,7 +689,7 @@ static void wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t t
 	}
 
 	/* Submit a frame for this event */
-	struct wl_buffer *buffer = draw_frame(g_context.width_shm, g_context.height_shm);
+	struct wl_buffer *buffer = draw_frame(g_context.width_shm, g_context.height_shm, time);
 
 	wl_surface_attach(g_context.surface_mouse, g_context.bufferMouse, 0, 0);
 	wl_surface_attach(g_context.surface, buffer, 0, 0);

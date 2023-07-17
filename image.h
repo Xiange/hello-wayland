@@ -45,11 +45,15 @@ void* image_getbits(image_handle* handle);
 
 
 void image_copy(image_handle* handle, void* dstMemory, int src_x, int src_y, 
-		int dst_x, int dst_y, int width, int height);
+		int dst_x, int dst_y, int dst_stride, int width, int height);
 
-//allocate a new hanle, from memory bits. (32bpp)
+
+void image_copy_vflip(image_handle* handle, void* dstMemory, int src_x, int src_y, 
+		int dst_x, int dst_y, int dst_stride, int width, int height);
+
+//convert bits to an image_handle structure
 //return a new handle
-void* image_frombits(void* memory_bits, int width, int height, int stride);
+void image_frombits(void* memory_bits, image_handle* ret_handle, int width, int height, int stride);
 
 
 //rescale to new size, return a new handle

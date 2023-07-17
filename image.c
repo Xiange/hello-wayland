@@ -125,7 +125,7 @@ void image_unload(image_handle* handle)
 	if(handle->pages_max!=0)
 	{
 		//multi-pages
-		if(dib) FreeImage_Unload(dib);
+		if(dib) FreeImage_UnlockPage(dim, dib, FALSE);
 		if(dim) FreeImage_CloseMultiBitmap(dim, 0);
 	}
 	else
@@ -154,51 +154,102 @@ void image_rescale(image_handle* handle_src, image_handle* handle_dst, int new_w
 
 //copy part of image to memory
 void image_copy(image_handle* handle, void* dstMemory, int src_x, int src_y, 
-		int dst_x, int dst_y, int width, int height)
+		int dst_x, int dst_y, int dst_stride, int width, int height)
 {
 	FIBITMAP * dib=(FIBITMAP*)handle->handle;
 	int i, ws, hs;
 
-	ws=FreeImage_GetWidth(dib);
-	hs=FreeImage_GetHeight(dib);
+	ws=width;
+	hs=height;
 
-	//calculate how much data copy
-	if(ws>width) ws=width;
-	if(hs>height) hs=height;
+	if(src_x+width > handle->width)
+	{
+		//width exceed
+		ws=handle->width-src_x;
+	}
+	if(src_y+height > handle->height)
+	{
+		//height exceed
+		hs=handle->height-src_y;
+	}
 
+	dstMemory+=(dst_y*dst_stride);
 	for(i=0; i<hs; i++)
 	{
 		uint32_t* pData=(uint32_t*)FreeImage_GetScanLine(dib, src_y+i);
-		memcpy(dstMemory, (const void*)(pData+src_x), ws*4);
-		dstMemory+=(width*4);
-		if(i==0) 
-		{
-			fprintf(stderr, "Dump: %04X %04X %04X %04X\n", pData[0], pData[1], pData[2], pData[3]);
-		}
+		memcpy(dstMemory+dst_x*4, (const void*)(pData+src_x), ws*4);
+		dstMemory+=dst_stride;
+//		if(i==0) 
+//		{
+//			fprintf(stderr, "Dump: %04X %04X %04X %04X\n", pData[0], pData[1], pData[2], pData[3]);
+//		}
+	}
+}
+
+//copy part of image to memory in v-flip mode
+void image_copy_vflip(image_handle* handle, void* dstMemory, int src_x, int src_y, 
+		int dst_x, int dst_y, int dst_stride, int width, int height)
+{
+	FIBITMAP * dib=(FIBITMAP*)handle->handle;
+	int i, ws, hs;
+
+	ws=width;
+	hs=height;
+
+	if(src_x+width > handle->width)
+	{
+		//width exceed
+		ws=handle->width-src_x;
+	}
+	if(src_y+height > handle->height)
+	{
+		//height exceed
+		hs=handle->height-src_y;
+	}
+
+	dstMemory+=((dst_y+hs-1)*dst_stride);
+	for(i=0; i<hs; i++)
+	{
+		uint32_t* pData=(uint32_t*)FreeImage_GetScanLine(dib, src_y+i);
+		memcpy(dstMemory+dst_x*4, (const void*)(pData+src_x), ws*4);
+		dstMemory-=dst_stride;
+//		if(i==0) 
+//		{
+//			fprintf(stderr, "Dump: %04X %04X %04X %04X\n", pData[0], pData[1], pData[2], pData[3]);
+//		}
 	}
 }
 
 
+
 void* image_getbits(image_handle* handle)
 {
-	FIBITMAP * dib=(FIBITMAP*)handle;
+	FIBITMAP * dib=(FIBITMAP*)handle->handle;
 	return FreeImage_GetBits(dib);
 }
 
 //copy part of image to memory (must 32bit bpp)
-void* image_frombits(void* memory_bits, int width, int height, int stride)
+void image_frombits(void* memory_bits, image_handle* pRet, int width, int height, int stride)
 {
-	return FreeImage_ConvertFromRawBits(memory_bits, width, height, stride, 32, 0xff0000, 0xff00, 0xff, FALSE);
+	FIBITMAP * dib;
+
+	dib=FreeImage_ConvertFromRawBits(memory_bits, width, height, stride, 32, 0xff0000, 0xff00, 0xff, FALSE);
+	pRet->handle=dib;
+	pRet->handle_mp=NULL;
+
+	image_getinfo(pRet);
 }
 
 //return a normal image
 void image_mp_lock_page(image_handle* handle, int page)
 {
-	FIMULTIBITMAP * dib=(FIMULTIBITMAP*)handle->handle_mp;
-	if(dib)
+	FIMULTIBITMAP * dim=(FIMULTIBITMAP*)handle->handle_mp;
+	FIBITMAP * dib=(FIBITMAP*)handle->handle;
+	if(dim)
 	{
-		FreeImage_Unload((FIBITMAP*)handle->handle);
-	 	handle->handle=FreeImage_LockPage(dib, page);
+		if(page >= handle->pages_max) page=0;
+		if(dib) FreeImage_UnlockPage(dim, dib, FALSE);
+	 	handle->handle=FreeImage_LockPage(dim, page);
 		handle->pages_cur=page;
 	}
 }

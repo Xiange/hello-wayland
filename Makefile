@@ -8,6 +8,8 @@ all: helloworld
 
 clean:
 	rm helloworld
+	rm xdg-shell-client-protocol.h
+	rm xdg-shell-protocol.c
 
 helloworld: $(SOURCES) xdg-shell-client-protocol.h
 	gcc -o $@ $(SOURCES) -lwayland-client -lcairo -lfreeimage
