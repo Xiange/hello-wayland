@@ -9,12 +9,12 @@
 #include "shm.h"
 #include "image.h"
 #include "cairo/cairo.h"
+#include "config.h"
 
 void* LoadImageFile(const char* file, int* pWidth, int* pHeight);
 
 static void draw_cairo(int x, int y);
 static struct wl_buffer *draw_frame(int width, int height, int time_in_ms); 
-static void *draw_gif(int x, int y, int time_in_ms); 
 
 //Seat callbacks
 static void seat_handle_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities);
@@ -196,13 +196,13 @@ int main()
 	//load png image
 	image_init();
 	
-	iRet=image_load("./test.png", &g_context.img_handle);
+	iRet=image_load(hello_datadir "/test.png", &g_context.img_handle);
 	if(iRet)
 	{
     	fprintf(stderr, "PNG loaded failed, code=%d\n", iRet);
 	}
 
-	iRet=image_load("./t2.gif", &g_context.gif_handle);
+	iRet=image_load(hello_datadir "./t2.gif", &g_context.gif_handle);
 	if(iRet)
 	{
     	fprintf(stderr, "GIF loaded failed, code=%d\n", iRet);
@@ -439,7 +439,6 @@ static struct wl_buffer *draw_frame(int width, int height, int time_in_ms)
 {
 
 	int stride = width * 4;
-	int size = stride * height;
 
 	//first create buffer in need
 	if(create_buffer(width, height)!=0)
@@ -576,7 +575,7 @@ static void pointer_axis(void *data,
 static void pointer_handle_button(void *data, struct wl_pointer *pointer,
 		uint32_t serial, uint32_t time, uint32_t button, uint32_t state) 
 {
-	struct wl_seat *seat = data;
+	//struct wl_seat *seat = data;
 
 	fprintf(stderr, "pointer_button, btn=%d, stat=%d, serial=%d, time=%d\n", button, state,
 			serial, time);
@@ -706,8 +705,5 @@ static const struct wl_callback_listener wl_surface_frame_listener = {
 };
 
 
-static void *draw_gif(int x, int y, int time_in_ms) 
-{
-}
 
 

@@ -54,7 +54,6 @@ int image_load(const char* file, image_handle* phandle)
 	FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
 	FIBITMAP * dib=NULL;
 	FIMULTIBITMAP * dim=NULL;
-	int width, height;
 	int page_count=0;
 
 
