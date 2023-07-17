@@ -19,7 +19,7 @@ scanner=wayland_scanner.get_variable('wayland_scanner')
 
 custom_target(
     'xdg-shell-protocol.c',
-    input: wl_proto_dir / '/stable/xdg-shell/xdg-shell.xml',
+    input: wl_proto_xdg
     output: 'xdg-shell-protocol.c',
     command: [scanner, 'private-code', '@INPUT@', '@OUTPUT@']
 )
