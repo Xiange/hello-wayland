@@ -1,4 +1,4 @@
-project('helloworld', 'c', version: '0.10')
+project('hello-wayland', 'c', version: '0.10')
 
 wayland_scanner = dependency('wayland-scanner')
 wayland_protos = dependency('wayland-protocols', version: '>=1.24')
@@ -54,7 +54,7 @@ hello_deps = [
 #image install dir
 prefix = get_option('prefix')
 datadir = get_option('datadir')
-data_install_dir= prefix + '/' + datadir + '/helloworld'
+data_install_dir= prefix + '/' + datadir + '/hello-wayland'
 message('Data dir @: ' +  data_install_dir)
 
 version = '"@0@"'.format(meson.project_version())
@@ -71,7 +71,7 @@ configure_file(output : 'config.h',
 
 
 executable(
-    'helloworld',
+    'hello-wayland',
     src_files,
 	dependencies: hello_deps,
 	install: true
