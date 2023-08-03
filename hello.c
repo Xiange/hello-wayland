@@ -305,8 +305,7 @@ ENDMAIN:
 	if(g_context.surface_mouse) wl_surface_destroy(g_context.surface_mouse);
 
 
-	if(g_context.pData32) munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4);
-	if(g_context.pDataMouse) munmap(g_context.pDataMouse, g_context.width_shm*g_context.height_shm*4);
+	if(g_context.pData32) munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4*2);
 	if(g_context.buffer) wl_buffer_destroy(g_context.buffer);
 	if(g_context.buffer) wl_buffer_destroy(g_context.bufferMouse);
     if(g_context.pool) wl_shm_pool_destroy(g_context.pool);
@@ -365,8 +364,7 @@ static int create_buffer(int width, int height)
 
 		if(g_context.pData32)
 		{
-			munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4);
-			munmap(g_context.pDataMouse, g_context.width_shm*g_context.height_shm*4);
+			munmap(g_context.pData32, g_context.width_shm*g_context.height_shm*4*2);
 			g_context.pData32=NULL;
 			g_context.pDataMouse=NULL;
 		}
@@ -377,15 +375,15 @@ static int create_buffer(int width, int height)
 		uint32_t *data = mmap(NULL, size,
 				PROT_READ | PROT_WRITE, MAP_SHARED, g_context.shm_fd, 0);
 
-		g_context.pDataMouse = mmap(NULL, size,
-				PROT_READ | PROT_WRITE, MAP_SHARED, g_context.shm_fd, offset);
-		if (data == MAP_FAILED || g_context.pDataMouse==MAP_FAILED) {
+		if (data == MAP_FAILED) 
+		{
 			fprintf(stderr, "mmap fd %d failed, size=%d\n", g_context.shm_fd, size);
 			close(g_context.shm_fd);
 			g_context.shm_fd=-1;
 			return 2;
 		}
 		g_context.pData32=data;
+		g_context.pDataMouse=data+width*height;
 
 		if(g_context.bufferMouse) wl_buffer_destroy(g_context.bufferMouse);
 		if(g_context.buffer) wl_buffer_destroy(g_context.buffer);
