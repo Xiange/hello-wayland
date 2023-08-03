@@ -1,3 +1,3 @@
 #!/bin/sh
-meson setup --prefix=/usr ..
+meson setup --prefix=/opt/hellowayladn ..
 

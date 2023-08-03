@@ -202,7 +202,7 @@ int main()
     	fprintf(stderr, "PNG loaded failed, code=%d\n", iRet);
 	}
 
-	iRet=image_load(hello_datadir "./t2.gif", &g_context.gif_handle);
+	iRet=image_load(hello_datadir "/t2.gif", &g_context.gif_handle);
 	if(iRet)
 	{
     	fprintf(stderr, "GIF loaded failed, code=%d\n", iRet);
